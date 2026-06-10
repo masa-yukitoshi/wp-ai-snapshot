@@ -152,6 +152,14 @@ field_samples
 
 ## インストール
 
+### zip ファイルをダウンロードしてインストール（かんたん）
+
+1. **[wp-ai-snapshot.zip をダウンロード](https://github.com/masa-yukitoshi/wp-ai-snapshot/releases/latest/download/wp-ai-snapshot.zip)**
+2. WordPress 管理画面 › プラグイン › 新規追加 › **「プラグインのアップロード」** を選択
+3. ダウンロードした zip ファイルをアップロード → 有効化
+
+### 手動でインストール
+
 1. `wp-ai-snapshot` フォルダごと `wp-content/plugins/` にアップロード
 2. WordPress 管理画面 › プラグイン から **「WP AI Snapshot」** を有効化
 
