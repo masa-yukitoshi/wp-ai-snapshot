@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: WP AI Snapshot
- * Description: 投稿タイプ・タクソノミー・SCFフィールド・Lazy Blocks等のWordPress構成情報をJSON / Markdownとして一括出力します。AIへ渡す際にお使いください。
+ * Description: WordPress の構成情報（投稿タイプ・タクソノミー・フィールド・メニュー・プラグイン・SEO設定等）をJSON / Markdownで一括出力します。Claude・ChatGPT 等のAIへサイト構成を伝える際にお使いください。REST API・WP-CLI にも対応しています。
  * Version:     1.4.0
  * Author:      den-web
  */
