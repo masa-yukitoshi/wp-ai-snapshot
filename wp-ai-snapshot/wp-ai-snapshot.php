@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP AI Snapshot
  * Description: 投稿タイプ・タクソノミー・SCFフィールド・Lazy Blocks等のWordPress構成情報をJSON / Markdownとして一括出力します。AIへ渡す際にお使いください。
- * Version:     1.3.0
+ * Version:     1.4.0
  * Author:      den-web
  */
 
@@ -32,6 +32,9 @@ function wpais_sections() {
 		'aioseo'         => 'All in One SEO',
 		'cf7'            => 'Contact Form 7',
 		'mwform'         => 'MW WP Form',
+		'widgets'        => 'ウィジェット',
+		'block_patterns' => 'ブロックパターン',
+		'field_samples'  => 'カスタムフィールドサンプル',
 	];
 }
 
@@ -419,6 +422,9 @@ function wpais_generate( $sections = null ) {
 		'aioseo'         => 'wpais_aioseo',
 		'cf7'            => 'wpais_cf7',
 		'mwform'         => 'wpais_mwform',
+		'widgets'        => 'wpais_widgets',
+		'block_patterns' => 'wpais_block_patterns',
+		'field_samples'  => 'wpais_field_samples',
 	];
 
 	$allowed = ( $sections !== null ) ? array_flip( $sections ) : null;
@@ -945,6 +951,143 @@ function wpais_mwform_parse_fields( $content ) {
 }
 
 
+// ---- ウィジェット ----
+function wpais_widgets() {
+	global $wp_registered_sidebars;
+
+	$sidebars_widgets = get_option( 'sidebars_widgets', [] );
+	$result           = [];
+
+	foreach ( $sidebars_widgets as $sidebar_id => $widget_ids ) {
+		if ( in_array( $sidebar_id, [ 'wp_inactive_widgets', 'array_version' ], true ) ) continue;
+		if ( empty( $widget_ids ) || ! is_array( $widget_ids ) ) continue;
+
+		$label   = $wp_registered_sidebars[ $sidebar_id ]['name'] ?? $sidebar_id;
+		$widgets = [];
+
+		foreach ( $widget_ids as $widget_id ) {
+			if ( ! preg_match( '/^(.+)-(\d+)$/', $widget_id, $m ) ) continue;
+			$type      = $m[1];
+			$number    = (int) $m[2];
+			$instances = get_option( 'widget_' . $type, [] );
+			$instance  = $instances[ $number ] ?? [];
+
+			$widgets[] = [
+				'id'    => $widget_id,
+				'type'  => $type,
+				'title' => $instance['title'] ?? null,
+			];
+		}
+
+		if ( $widgets ) {
+			$result[] = [
+				'sidebar' => $sidebar_id,
+				'label'   => $label,
+				'widgets' => $widgets,
+			];
+		}
+	}
+
+	return empty( $result ) ? null : $result;
+}
+
+
+// ---- ブロックパターン ----
+function wpais_block_patterns() {
+	if ( ! class_exists( 'WP_Block_Patterns_Registry' ) ) return null;
+
+	$all    = WP_Block_Patterns_Registry::get_instance()->get_all_registered();
+	$result = [];
+
+	foreach ( $all as $pattern ) {
+		if ( strpos( $pattern['name'], 'core/' ) === 0 ) continue;
+		$result[] = [
+			'name'        => $pattern['name'],
+			'title'       => $pattern['title'],
+			'categories'  => $pattern['categories'] ?? [],
+			'description' => ! empty( $pattern['description'] ) ? $pattern['description'] : null,
+		];
+	}
+
+	return empty( $result ) ? null : $result;
+}
+
+
+// ---- カスタムフィールドサンプル ----
+function wpais_field_samples() {
+	if ( ! function_exists( 'acf_get_field_groups' ) || ! function_exists( 'get_field' ) ) return null;
+
+	$groups = acf_get_field_groups();
+	$result = [];
+
+	foreach ( $groups as $group ) {
+		$post_id = wpais_sample_post_for_group( $group );
+		if ( ! $post_id ) continue;
+
+		$fields = acf_get_fields( $group['key'] ) ?: [];
+		if ( empty( $fields ) ) continue;
+
+		$samples = [];
+		foreach ( $fields as $field ) {
+			$value = get_field( $field['key'], $post_id, false );
+			if ( $value === null || $value === '' || $value === false ) continue;
+			$samples[ $field['name'] ] = wpais_sample_value( $value );
+		}
+
+		if ( $samples ) {
+			$result[] = [
+				'group'   => $group['title'],
+				'post_id' => $post_id,
+				'samples' => $samples,
+			];
+		}
+	}
+
+	return empty( $result ) ? null : $result;
+}
+
+function wpais_sample_post_for_group( array $group ) {
+	foreach ( ( $group['location'] ?? [] ) as $rule_group ) {
+		foreach ( $rule_group as $rule ) {
+			if ( $rule['operator'] !== '==' ) continue;
+
+			if ( $rule['param'] === 'post_type' ) {
+				$posts = get_posts( [ 'post_type' => $rule['value'], 'posts_per_page' => 1, 'post_status' => 'publish' ] );
+				if ( $posts ) return $posts[0]->ID;
+			}
+
+			if ( $rule['param'] === 'post' ) {
+				return (int) $rule['value'];
+			}
+
+			if ( $rule['param'] === 'page_type' && $rule['value'] === 'front_page' ) {
+				$id = (int) get_option( 'page_on_front' );
+				if ( $id ) return $id;
+			}
+		}
+	}
+	return null;
+}
+
+function wpais_sample_value( $value ) {
+	if ( is_array( $value ) ) {
+		if ( empty( $value ) ) return null;
+		// リピーター / グループ
+		if ( isset( $value[0] ) && is_array( $value[0] ) ) {
+			return '[' . count( $value ) . ' items]';
+		}
+		return array_slice( $value, 0, 3 );
+	}
+	if ( is_object( $value ) ) {
+		return isset( $value->ID ) ? '[post:' . $value->ID . ']' : (string) $value;
+	}
+	if ( is_string( $value ) && mb_strlen( $value ) > 100 ) {
+		return mb_substr( $value, 0, 100 ) . '…';
+	}
+	return $value;
+}
+
+
 // ============================================================
 // Markdown 変換
 // ============================================================
@@ -1220,6 +1363,46 @@ function wpais_to_markdown( array $data ) {
 				foreach ( $form['fields'] as $field ) {
 					$lines[] = '| ' . $field['name'] . ' | ' . $field['type'] . ' | ' . ( $field['required'] ? '✓' : '' ) . ' |';
 				}
+			}
+			$lines[] = '';
+		}
+	}
+
+	// ---- ウィジェット ----
+	if ( ! empty( $data['widgets'] ) ) {
+		$lines[] = '## ウィジェット';
+		foreach ( $data['widgets'] as $sidebar ) {
+			$lines[] = '### ' . $sidebar['label'] . ' (`' . $sidebar['sidebar'] . '`)';
+			foreach ( $sidebar['widgets'] as $w ) {
+				$label   = $w['title'] ? $w['type'] . '（' . $w['title'] . '）' : $w['type'];
+				$lines[] = '- ' . $label;
+			}
+			$lines[] = '';
+		}
+	}
+
+	// ---- ブロックパターン ----
+	if ( ! empty( $data['block_patterns'] ) ) {
+		$lines[] = '## ブロックパターン';
+		$lines[] = '| 名前 | タイトル | カテゴリ |';
+		$lines[] = '|---|---|---|';
+		foreach ( $data['block_patterns'] as $pattern ) {
+			$cats    = ! empty( $pattern['categories'] ) ? implode( ', ', (array) $pattern['categories'] ) : '';
+			$lines[] = '| `' . $pattern['name'] . '` | ' . $pattern['title'] . ' | ' . $cats . ' |';
+		}
+		$lines[] = '';
+	}
+
+	// ---- カスタムフィールドサンプル ----
+	if ( ! empty( $data['field_samples'] ) ) {
+		$lines[] = '## カスタムフィールドサンプル';
+		foreach ( $data['field_samples'] as $item ) {
+			$lines[] = '### ' . $item['group'] . '（投稿ID: ' . $item['post_id'] . '）';
+			$lines[] = '| フィールド名 | サンプル値 |';
+			$lines[] = '|---|---|';
+			foreach ( $item['samples'] as $name => $value ) {
+				$display = is_array( $value ) ? implode( ', ', array_map( 'strval', $value ) ) : (string) $value;
+				$lines[] = '| ' . $name . ' | ' . str_replace( "\n", ' ', $display ) . ' |';
 			}
 			$lines[] = '';
 		}
