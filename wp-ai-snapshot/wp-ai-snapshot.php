@@ -2,8 +2,8 @@
 /**
  * Plugin Name: WP AI Snapshot
  * Description: WordPress の構成情報（投稿タイプ・タクソノミー・フィールド・メニュー・プラグイン・SEO設定等）をJSON / Markdownで一括出力します。Claude・ChatGPT 等のAIへサイト構成を伝える際にお使いください。REST API・WP-CLI にも対応しています。
- * Version:     1.4.0
- * Author:      den-web
+ * Version:     1.4.1
+ * Author:      Den LLC.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -113,11 +113,45 @@ function wpais_page() {
 			<p id="wpais-preview-tokens" style="margin-top:6px;font-size:12px;color:#666;"></p>
 		</div>
 
-		<div style="margin-top:20px;padding:12px;background:#f6f7f7;border:1px solid #c3c4c7;border-radius:3px;font-size:12px;color:#666;">
-			<strong>REST API</strong>：
-			<code><?php echo esc_html( $rest_url ); ?></code>
-			&ensp;（要認証 — WP アプリケーションパスワードを使用）<br>
-			パラメータ: <code>format=json|md</code>　<code>sections=environment,plugins,…</code>
+		<div style="margin-top:24px;border-top:1px solid #dcdcde;padding-top:20px;">
+			<p style="font-size:14px;font-weight:600;margin:0 0 14px;">AI への渡し方</p>
+			<div style="display:grid;gap:12px;">
+
+				<div style="padding:14px;background:#fff;border:1px solid #c3c4c7;border-radius:3px;">
+					<p style="margin:0 0 5px;font-size:13px;font-weight:600;">① チャットにコピペ &ensp;<span style="font-weight:400;font-size:12px;color:#2271b1;">いちばん手軽</span></p>
+					<p style="margin:0;font-size:13px;color:#3c434a;">上の「<strong>Markdown をコピー</strong>」ボタンを押して、Claude・ChatGPT などのチャット欄に貼り付けてください。</p>
+				</div>
+
+				<div style="padding:14px;background:#fff;border:1px solid #c3c4c7;border-radius:3px;">
+					<p style="margin:0 0 5px;font-size:13px;font-weight:600;">② Claude Code を使っている場合 — CLAUDE.md に追記 &ensp;<span style="font-weight:400;font-size:12px;color:#2271b1;">おすすめ</span></p>
+					<p style="margin:0 0 8px;font-size:13px;color:#3c434a;">プロジェクトの <code>CLAUDE.md</code> に以下を書いておくと、Claude が作業前に自動でサイト構成を参照できます。</p>
+<pre id="wpais-claudemd-snippet" style="margin:0 0 8px;padding:10px;background:#f6f7f7;border:1px solid #c3c4c7;border-radius:3px;font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-all;">## WordPress サイト構成
+
+このプロジェクトの WordPress 構成情報は WP AI Snapshot で管理しています。
+コーディング作業の前に、最新のスナップショットを確認してください。
+
+取得 URL（Markdown 形式）：
+<?php echo esc_html( $rest_url ); ?>?format=md
+
+認証：管理画面 › ユーザー › プロフィール の「アプリケーションパスワード」で発行したパスワードを使用
+（アプリケーションパスワードは WordPress 管理画面で発行できる外部ツール用の専用パスワードです）</pre>
+					<button type="button" id="wpais-copy-claudemd" class="button button-small">CLAUDE.md 用テキストをコピー</button>
+				</div>
+
+				<div style="padding:14px;background:#fff;border:1px solid #c3c4c7;border-radius:3px;">
+					<p style="margin:0 0 5px;font-size:13px;font-weight:600;">③ REST API — curl や外部ツールから直接取得</p>
+					<p style="margin:0 0 6px;font-size:13px;color:#3c434a;">
+						URL：<code><?php echo esc_html( $rest_url ); ?></code>
+						&ensp;<button type="button" id="wpais-copy-resturl" class="button button-small">URL をコピー</button>
+					</p>
+					<p style="margin:0;font-size:12px;color:#666;">
+						アクセスには認証が必要です。管理画面 › <strong>ユーザー › プロフィール</strong> ページ下部の「アプリケーションパスワード」欄から専用パスワードを発行してください。<br>
+						アプリケーションパスワードとは、外部ツール用に WordPress が発行する専用パスワードです。通常のログインパスワードを使い回さずに済むため安全です。<br>
+						パラメータ：<code>?format=md</code> で Markdown 形式、<code>?format=json</code> で JSON 形式
+					</p>
+				</div>
+
+			</div>
 		</div>
 	</div>
 
@@ -235,6 +269,29 @@ function wpais_page() {
 		document.getElementById('wpais-preview-close').addEventListener('click', () => {
 			previewArea.style.display = 'none';
 			previewBtn.textContent    = 'プレビュー';
+		});
+
+		// ② CLAUDE.md テキストコピー
+		document.getElementById('wpais-copy-claudemd').addEventListener('click', async function () {
+			const text = document.getElementById('wpais-claudemd-snippet').textContent;
+			try {
+				await navigator.clipboard.writeText(text);
+				this.textContent = '✓ コピーしました';
+				setTimeout(() => { this.textContent = 'CLAUDE.md 用テキストをコピー'; }, 2500);
+			} catch (err) {
+				alert('コピーに失敗しました: ' + err.message);
+			}
+		});
+
+		// ③ REST API URL コピー
+		document.getElementById('wpais-copy-resturl').addEventListener('click', async function () {
+			try {
+				await navigator.clipboard.writeText(<?php echo wp_json_encode( $rest_url ); ?>);
+				this.textContent = '✓ コピーしました';
+				setTimeout(() => { this.textContent = 'URL をコピー'; }, 2500);
+			} catch (err) {
+				alert('コピーに失敗しました: ' + err.message);
+			}
 		});
 	})();
 	</script>
