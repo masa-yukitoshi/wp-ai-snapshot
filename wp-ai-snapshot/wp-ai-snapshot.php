@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP AI Snapshot
  * Description: 投稿タイプ・タクソノミー・SCFフィールド・Lazy Blocks等のWordPress構成情報をJSON / Markdownとして一括出力します。AIへ渡す際にお使いください。
- * Version:     1.2.0
+ * Version:     1.3.0
  * Author:      den-web
  */
 
@@ -27,9 +27,11 @@ function wpais_sections() {
 		'menus'          => 'ナビゲーションメニュー',
 		'field_groups'   => 'SCF / ACF フィールドグループ',
 		'blocks'         => 'Lazy Blocks',
+		'smb'            => 'Snow Monkey Blocks',
 		'yoast'          => 'Yoast SEO',
 		'aioseo'         => 'All in One SEO',
 		'cf7'            => 'Contact Form 7',
+		'mwform'         => 'MW WP Form',
 	];
 }
 
@@ -51,6 +53,7 @@ function wpais_page() {
 	$sections   = wpais_sections();
 	$copy_nonce = wp_create_nonce( 'wpais_copy' );
 	$ajax_url   = admin_url( 'admin-ajax.php' );
+	$rest_url   = rest_url( 'wp-ai-snapshot/v1/snapshot' );
 	?>
 	<div class="wrap">
 		<h1>AI Snapshot</h1>
@@ -91,18 +94,38 @@ function wpais_page() {
 
 			<button type="button" id="wpais-copy-md" class="button">Markdown をコピー</button>
 			<button type="button" id="wpais-copy-json" class="button">JSON をコピー</button>
+			<button type="button" id="wpais-preview-btn" class="button">プレビュー</button>
 
 			<span id="wpais-status" style="font-size:13px;color:#2271b1;"></span>
 		</div>
 
 		<p id="wpais-tokens" style="margin-top:10px;font-size:12px;color:#666;"></p>
+
+		<div id="wpais-preview-area" style="display:none;margin-top:16px;">
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+				<strong style="font-size:13px;">Markdown プレビュー</strong>
+				<button type="button" id="wpais-preview-close" class="button button-small">閉じる</button>
+			</div>
+			<pre id="wpais-preview-content" style="max-height:420px;overflow:auto;padding:14px;background:#f6f7f7;border:1px solid #c3c4c7;border-radius:3px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-word;"></pre>
+			<p id="wpais-preview-tokens" style="margin-top:6px;font-size:12px;color:#666;"></p>
+		</div>
+
+		<div style="margin-top:20px;padding:12px;background:#f6f7f7;border:1px solid #c3c4c7;border-radius:3px;font-size:12px;color:#666;">
+			<strong>REST API</strong>：
+			<code><?php echo esc_html( $rest_url ); ?></code>
+			&ensp;（要認証 — WP アプリケーションパスワードを使用）<br>
+			パラメータ: <code>format=json|md</code>　<code>sections=environment,plugins,…</code>
+		</div>
 	</div>
 
 	<script>
 	(function () {
 		const STORAGE_KEY = 'wpais_sections_v1';
-		const boxes = document.querySelectorAll('.wpais-section');
+		const boxes       = document.querySelectorAll('.wpais-section');
+		const ajaxUrl     = <?php echo wp_json_encode( $ajax_url ); ?>;
+		const copyNonce   = <?php echo wp_json_encode( $copy_nonce ); ?>;
 
+		// localStorage から状態を復元
 		const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
 		if (Array.isArray(saved)) {
 			boxes.forEach(cb => { cb.checked = saved.includes(cb.value); });
@@ -139,33 +162,39 @@ function wpais_page() {
 		document.getElementById('wpais-form-json').addEventListener('submit', () => injectHidden('wpais-inject-json'));
 		document.getElementById('wpais-form-md').addEventListener('submit',   () => injectHidden('wpais-inject-md'));
 
+		async function fetchContent(format) {
+			const params = new URLSearchParams({
+				action: 'wpais_copy',
+				_ajax_nonce: copyNonce,
+				format: format,
+			});
+			selected().forEach(v => params.append('wpais_sections[]', v));
+
+			const res  = await fetch(ajaxUrl, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: params.toString(),
+			});
+			const json = await res.json();
+			if (!json.success) throw new Error(json.data || 'unknown error');
+			return json.data.content;
+		}
+
+		function tokenEstimate(text) {
+			return Math.ceil(text.length / 2.5).toLocaleString();
+		}
+
+		// コピーボタン
 		async function copyContent(format) {
 			const status  = document.getElementById('wpais-status');
 			const tokenEl = document.getElementById('wpais-tokens');
 			status.textContent  = '取得中…';
 			tokenEl.textContent = '';
-
-			const params = new URLSearchParams({
-				action: 'wpais_copy',
-				_ajax_nonce: <?php echo wp_json_encode( $copy_nonce ); ?>,
-				format: format,
-			});
-			selected().forEach(v => params.append('wpais_sections[]', v));
-
 			try {
-				const res  = await fetch(<?php echo wp_json_encode( $ajax_url ); ?>, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-					body: params.toString(),
-				});
-				const json = await res.json();
-				if (!json.success) throw new Error(json.data || 'unknown error');
-
-				await navigator.clipboard.writeText(json.data.content);
-
-				const tokens = Math.ceil(json.data.content.length / 2.5).toLocaleString();
+				const content = await fetchContent(format);
+				await navigator.clipboard.writeText(content);
 				status.textContent  = '✓ コピーしました';
-				tokenEl.textContent = `約 ${tokens} tokens（目安）`;
+				tokenEl.textContent = `約 ${tokenEstimate(content)} tokens（目安）`;
 				setTimeout(() => status.textContent = '', 3000);
 			} catch (err) {
 				status.textContent = 'コピー失敗: ' + err.message;
@@ -174,6 +203,36 @@ function wpais_page() {
 
 		document.getElementById('wpais-copy-md').addEventListener('click',  () => copyContent('md'));
 		document.getElementById('wpais-copy-json').addEventListener('click', () => copyContent('json'));
+
+		// プレビュー
+		const previewArea    = document.getElementById('wpais-preview-area');
+		const previewContent = document.getElementById('wpais-preview-content');
+		const previewTokens  = document.getElementById('wpais-preview-tokens');
+		const previewBtn     = document.getElementById('wpais-preview-btn');
+
+		previewBtn.addEventListener('click', async function () {
+			if (previewArea.style.display !== 'none') {
+				previewArea.style.display = 'none';
+				previewBtn.textContent = 'プレビュー';
+				return;
+			}
+			previewArea.style.display = 'block';
+			previewBtn.textContent    = 'プレビューを閉じる';
+			previewContent.textContent = '読み込み中…';
+			previewTokens.textContent  = '';
+			try {
+				const content = await fetchContent('md');
+				previewContent.textContent = content;
+				previewTokens.textContent  = `約 ${tokenEstimate(content)} tokens（目安）`;
+			} catch (err) {
+				previewContent.textContent = 'エラー: ' + err.message;
+			}
+		});
+
+		document.getElementById('wpais-preview-close').addEventListener('click', () => {
+			previewArea.style.display = 'none';
+			previewBtn.textContent    = 'プレビュー';
+		});
 	})();
 	</script>
 	<?php
@@ -230,7 +289,7 @@ add_action( 'admin_post_wpais_download_md', function () {
 
 
 // ============================================================
-// AJAX — クリップボードコピー
+// AJAX — クリップボードコピー / プレビュー
 // ============================================================
 add_action( 'wp_ajax_wpais_copy', function () {
 	check_ajax_referer( 'wpais_copy' );
@@ -252,6 +311,92 @@ add_action( 'wp_ajax_wpais_copy', function () {
 
 
 // ============================================================
+// REST API
+// ============================================================
+add_action( 'rest_api_init', function () {
+	register_rest_route( 'wp-ai-snapshot/v1', '/snapshot', [
+		'methods'             => 'GET',
+		'callback'            => 'wpais_rest_handler',
+		'permission_callback' => function () {
+			return current_user_can( 'manage_options' );
+		},
+		'args' => [
+			'format' => [
+				'type'    => 'string',
+				'enum'    => [ 'json', 'md' ],
+				'default' => 'json',
+			],
+			'sections' => [
+				'type' => 'string',
+			],
+		],
+	] );
+} );
+
+function wpais_rest_handler( WP_REST_Request $request ) {
+	$sections_param = $request->get_param( 'sections' );
+	$sections       = $sections_param
+		? array_map( 'sanitize_key', array_filter( explode( ',', $sections_param ) ) )
+		: null;
+
+	$data   = wpais_generate( $sections );
+	$format = $request->get_param( 'format' );
+
+	if ( $format === 'md' ) {
+		return rest_ensure_response( [ 'content' => wpais_to_markdown( $data ) ] );
+	}
+
+	return rest_ensure_response( $data );
+}
+
+
+// ============================================================
+// WP-CLI
+// ============================================================
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	class WPAIS_CLI_Command {
+
+		/**
+		 * WordPress の構成情報をスナップショットとして出力します。
+		 *
+		 * ## OPTIONS
+		 *
+		 * [--format=<format>]
+		 * : 出力形式。json（デフォルト）または md。
+		 *
+		 * [--sections=<sections>]
+		 * : 出力するセクションをカンマ区切りで指定。省略時は全セクション。
+		 * : 例: environment,plugins,post_types
+		 *
+		 * ## EXAMPLES
+		 *
+		 *   wp ai-snapshot export
+		 *   wp ai-snapshot export --format=md
+		 *   wp ai-snapshot export --format=md > snapshot.md
+		 *   wp ai-snapshot export --sections=environment,plugins,post_types
+		 */
+		public function export( $args, $assoc_args ) {
+			$format       = $assoc_args['format'] ?? 'json';
+			$sections_str = $assoc_args['sections'] ?? null;
+			$sections     = $sections_str
+				? array_map( 'sanitize_key', array_filter( explode( ',', $sections_str ) ) )
+				: null;
+
+			$data = wpais_generate( $sections );
+
+			if ( $format === 'md' ) {
+				WP_CLI::log( wpais_to_markdown( $data ) );
+			} else {
+				WP_CLI::log( wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) );
+			}
+		}
+	}
+
+	WP_CLI::add_command( 'ai-snapshot', 'WPAIS_CLI_Command' );
+}
+
+
+// ============================================================
 // データ収集
 // ============================================================
 function wpais_generate( $sections = null ) {
@@ -269,9 +414,11 @@ function wpais_generate( $sections = null ) {
 		'menus'          => 'wpais_menus',
 		'field_groups'   => 'wpais_scf',
 		'blocks'         => 'wpais_lazy_blocks',
+		'smb'            => 'wpais_smb',
 		'yoast'          => 'wpais_yoast',
 		'aioseo'         => 'wpais_aioseo',
 		'cf7'            => 'wpais_cf7',
+		'mwform'         => 'wpais_mwform',
 	];
 
 	$allowed = ( $sections !== null ) ? array_flip( $sections ) : null;
@@ -454,6 +601,7 @@ function wpais_post_types() {
 		'acf-taxonomy', 'acf-post-type', 'acf-ui-options-page', 'acf-field-group',
 		'lazyblocks', 'lazyblocks_templates',
 		'wpcf7_contact_form',
+		'mw-wp-form',
 	];
 
 	foreach ( $post_types as $pt ) {
@@ -516,23 +664,47 @@ function wpais_taxonomies() {
 }
 
 
-// ---- ナビゲーションメニュー ----
+// ---- ナビゲーションメニュー（項目詳細付き）----
 function wpais_menus() {
 	$locations = get_registered_nav_menus();
 	$assigned  = get_nav_menu_locations();
 	$result    = [];
 
 	foreach ( $locations as $location => $description ) {
-		$menu_id  = $assigned[ $location ] ?? null;
-		$menu     = $menu_id ? wp_get_nav_menu_object( $menu_id ) : null;
+		$menu_id   = $assigned[ $location ] ?? null;
+		$menu      = $menu_id ? wp_get_nav_menu_object( $menu_id ) : null;
+		$raw_items = $menu_id ? wp_get_nav_menu_items( $menu_id ) : [];
+
 		$result[] = [
 			'location'    => $location,
 			'description' => $description,
 			'menu_name'   => $menu ? $menu->name : null,
+			'items'       => $raw_items ? wpais_build_menu_tree( $raw_items ) : [],
 		];
 	}
 
 	return $result;
+}
+
+function wpais_build_menu_tree( array $items, $parent_id = 0 ) {
+	$tree = [];
+
+	foreach ( $items as $item ) {
+		if ( (int) $item->menu_item_parent !== $parent_id ) continue;
+
+		$node = [
+			'title' => $item->title,
+			'url'   => $item->url,
+			'type'  => $item->object,
+		];
+
+		$children = wpais_build_menu_tree( $items, $item->ID );
+		if ( $children ) $node['children'] = $children;
+
+		$tree[] = $node;
+	}
+
+	return $tree;
 }
 
 
@@ -567,9 +739,9 @@ function wpais_scf_fields( array $fields ) {
 			'type'  => $field['type'],
 		];
 
-		if ( ! empty( $field['choices'] ) )       $item['choices']       = $field['choices'];
-		if ( isset( $field['return_format'] ) )    $item['return_format'] = $field['return_format'];
-		if ( ! empty( $field['sub_fields'] ) )     $item['sub_fields']    = wpais_scf_fields( $field['sub_fields'] );
+		if ( ! empty( $field['choices'] ) )    $item['choices']       = $field['choices'];
+		if ( isset( $field['return_format'] ) ) $item['return_format'] = $field['return_format'];
+		if ( ! empty( $field['sub_fields'] ) )  $item['sub_fields']    = wpais_scf_fields( $field['sub_fields'] );
 
 		$result[] = $item;
 	}
@@ -604,6 +776,29 @@ function wpais_lazy_blocks() {
 }
 
 
+// ---- Snow Monkey Blocks ----
+function wpais_smb() {
+	$registry  = WP_Block_Type_Registry::get_instance();
+	$all_types = $registry->get_all_registered();
+	$blocks    = [];
+
+	foreach ( $all_types as $name => $block ) {
+		if ( strpos( $name, 'snow-monkey-blocks/' ) !== 0 ) continue;
+		$blocks[] = [
+			'name'  => $name,
+			'title' => $block->title ?? str_replace( 'snow-monkey-blocks/', '', $name ),
+		];
+	}
+
+	if ( empty( $blocks ) ) return null;
+
+	return [
+		'version' => defined( 'SNOW_MONKEY_BLOCKS_VERSION' ) ? SNOW_MONKEY_BLOCKS_VERSION : null,
+		'blocks'  => $blocks,
+	];
+}
+
+
 // ---- Yoast SEO ----
 function wpais_yoast() {
 	if ( ! defined( 'WPSEO_VERSION' ) ) return null;
@@ -618,9 +813,9 @@ function wpais_yoast() {
 	}
 
 	$sep_map = [
-		'sc-dash'   => '–', 'sc-ndash' => '–', 'sc-mdash' => '—',
-		'sc-pipe'   => '|', 'sc-tilde' => '~', 'sc-arrow' => '›',
-		'sc-laquo'  => '«', 'sc-raquo' => '»', 'sc-lt'   => '<',
+		'sc-dash'   => '–', 'sc-ndash' => '–', 'sc-mdash'  => '—',
+		'sc-pipe'   => '|', 'sc-tilde' => '~', 'sc-arrow'  => '›',
+		'sc-laquo'  => '«', 'sc-raquo' => '»', 'sc-lt'    => '<',
 		'sc-gt'     => '>', 'sc-bullet' => '·',
 	];
 	$sep_code = $titles['separator'] ?? 'sc-dash';
@@ -699,6 +894,50 @@ function wpais_cf7_parse_fields( $body ) {
 			'type'     => $m[1],
 			'name'     => $m[3],
 			'required' => $m[2] === '*',
+		];
+	}
+
+	return $result;
+}
+
+
+// ---- MW WP Form ----
+function wpais_mwform() {
+	if ( ! post_type_exists( 'mw-wp-form' ) ) return null;
+
+	$posts  = get_posts( [
+		'post_type'      => 'mw-wp-form',
+		'posts_per_page' => -1,
+		'post_status'    => 'publish',
+	] );
+	$result = [];
+
+	foreach ( $posts as $post ) {
+		$result[] = [
+			'id'     => $post->ID,
+			'title'  => $post->post_title,
+			'fields' => wpais_mwform_parse_fields( $post->post_content ),
+		];
+	}
+
+	return $result;
+}
+
+function wpais_mwform_parse_fields( $content ) {
+	$result  = [];
+	$exclude = [ 'mwform_submit', 'mwform_confirm', 'mwform_back', 'mwform_complete', 'mwform_unsubscribe' ];
+
+	// [mwform_type name="fieldname" ...]
+	preg_match_all( '/\[mwform_([a-zA-Z0-9_-]+)\s[^\]]*name=["\']([^"\']+)["\'][^\]]*\]/', $content, $matches, PREG_SET_ORDER );
+
+	foreach ( $matches as $m ) {
+		$tag = 'mwform_' . $m[1];
+		if ( in_array( $tag, $exclude, true ) ) continue;
+		$required = strpos( $m[0], 'required="true"' ) !== false || strpos( $m[0], "required='true'" ) !== false;
+		$result[] = [
+			'type'     => $m[1],
+			'name'     => $m[2],
+			'required' => $required,
 		];
 	}
 
@@ -841,12 +1080,15 @@ function wpais_to_markdown( array $data ) {
 	// ---- ナビゲーションメニュー ----
 	if ( isset( $data['menus'] ) ) {
 		$lines[] = '## ナビゲーションメニュー';
-		$lines[] = '| ロケーション | 説明 | 割り当てメニュー |';
-		$lines[] = '|---|---|---|';
 		foreach ( ( $data['menus'] ?? [] ) as $menu ) {
-			$lines[] = '| ' . $menu['location'] . ' | ' . $menu['description'] . ' | ' . ( $menu['menu_name'] ?? '未割り当て' ) . ' |';
+			$lines[] = '### ' . ( $menu['menu_name'] ?? '未割り当て' ) . ' (`' . $menu['location'] . '`)';
+			$lines[] = $menu['description'];
+			if ( ! empty( $menu['items'] ) ) {
+				$lines[] = '';
+				$lines = array_merge( $lines, wpais_md_menu_items( $menu['items'] ) );
+			}
+			$lines[] = '';
 		}
-		$lines[] = '';
 	}
 
 	// ---- SCF フィールドグループ ----
@@ -899,6 +1141,16 @@ function wpais_to_markdown( array $data ) {
 			}
 			$lines[] = '';
 		}
+	}
+
+	// ---- Snow Monkey Blocks ----
+	if ( ! empty( $data['smb'] ) ) {
+		$smb     = $data['smb'];
+		$lines[] = '## Snow Monkey Blocks' . ( ! empty( $smb['version'] ) ? ' v' . $smb['version'] : '' );
+		foreach ( ( $smb['blocks'] ?? [] ) as $block ) {
+			$lines[] = '- ' . $block['title'] . ' (`' . $block['name'] . '`)';
+		}
+		$lines[] = '';
 	}
 
 	// ---- Yoast SEO ----
@@ -957,5 +1209,35 @@ function wpais_to_markdown( array $data ) {
 		}
 	}
 
+	// ---- MW WP Form ----
+	if ( ! empty( $data['mwform'] ) ) {
+		$lines[] = '## MW WP Form';
+		foreach ( $data['mwform'] as $form ) {
+			$lines[] = '### ' . $form['title'] . ' (ID: ' . $form['id'] . ')';
+			if ( ! empty( $form['fields'] ) ) {
+				$lines[] = '| フィールド名 | タイプ | 必須 |';
+				$lines[] = '|---|---|---|';
+				foreach ( $form['fields'] as $field ) {
+					$lines[] = '| ' . $field['name'] . ' | ' . $field['type'] . ' | ' . ( $field['required'] ? '✓' : '' ) . ' |';
+				}
+			}
+			$lines[] = '';
+		}
+	}
+
 	return implode( "\n", $lines );
+}
+
+function wpais_md_menu_items( array $items, $depth = 0 ) {
+	$lines  = [];
+	$indent = str_repeat( '  ', $depth );
+
+	foreach ( $items as $item ) {
+		$lines[] = $indent . '- ' . $item['title'] . ' → ' . $item['url'];
+		if ( ! empty( $item['children'] ) ) {
+			$lines = array_merge( $lines, wpais_md_menu_items( $item['children'], $depth + 1 ) );
+		}
+	}
+
+	return $lines;
 }
