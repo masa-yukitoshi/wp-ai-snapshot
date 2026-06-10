@@ -80,29 +80,41 @@ function wpais_page() {
 			</div>
 		</div>
 
-		<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-			<form method="post" id="wpais-form-json" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
-				<?php wp_nonce_field( 'wpais_download' ); ?>
-				<input type="hidden" name="action" value="wpais_download_json">
-				<span id="wpais-inject-json"></span>
-				<button type="submit" class="button button-primary">JSON をダウンロード</button>
-			</form>
+		<div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;">
+			<div>
+				<button type="button" id="wpais-preview-btn" class="button">プレビュー</button>
+			</div>
 
-			<form method="post" id="wpais-form-md" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
-				<?php wp_nonce_field( 'wpais_download' ); ?>
-				<input type="hidden" name="action" value="wpais_download_md">
-				<span id="wpais-inject-md"></span>
-				<button type="submit" class="button button-secondary">Markdown をダウンロード</button>
-			</form>
+			<div>
+				<p style="margin:0 0 5px;font-size:11px;color:#50575e;">Markdown — AI チャット・Claude Code との連携に</p>
+				<div style="display:flex;gap:6px;">
+					<button type="button" id="wpais-copy-md" class="button button-primary">Markdown をコピー</button>
+					<form method="post" id="wpais-form-md" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
+						<?php wp_nonce_field( 'wpais_download' ); ?>
+						<input type="hidden" name="action" value="wpais_download_md">
+						<span id="wpais-inject-md"></span>
+						<button type="submit" class="button">Markdown をダウンロード</button>
+					</form>
+				</div>
+			</div>
 
-			<button type="button" id="wpais-copy-md" class="button">Markdown をコピー</button>
-			<button type="button" id="wpais-copy-json" class="button">JSON をコピー</button>
-			<button type="button" id="wpais-preview-btn" class="button">プレビュー</button>
+			<div>
+				<p style="margin:0 0 5px;font-size:11px;color:#50575e;">JSON — プログラムからの処理・自動化に</p>
+				<div style="display:flex;gap:6px;">
+					<button type="button" id="wpais-copy-json" class="button">JSON をコピー</button>
+					<form method="post" id="wpais-form-json" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline;">
+						<?php wp_nonce_field( 'wpais_download' ); ?>
+						<input type="hidden" name="action" value="wpais_download_json">
+						<span id="wpais-inject-json"></span>
+						<button type="submit" class="button">JSON をダウンロード</button>
+					</form>
+				</div>
+			</div>
 
 			<span id="wpais-status" style="font-size:13px;color:#2271b1;"></span>
 		</div>
 
-		<p id="wpais-tokens" style="margin-top:10px;font-size:12px;color:#666;"></p>
+		<p id="wpais-tokens" style="margin-top:8px;font-size:12px;color:#666;"></p>
 
 		<div id="wpais-preview-area" style="display:none;margin-top:16px;">
 			<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
