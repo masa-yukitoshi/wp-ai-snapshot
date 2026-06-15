@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.5.0] - 2026-06-15
+
+### Added
+- Smart Custom Fields フィールドグループ対応（新セクション `smcf`）
+  - `smart-cf-condition` / `smart-cf-setting` メタキーからフィールド定義を取得
+  - グループキー・繰り返し有無・フィールド一覧（名前・ラベル・タイプ・備考）を出力
+- WP Mail SMTP 対応（新セクション `wpsmtp`）
+  - 送信方法・From メール・From 名前・送信停止フラグを出力
+  - SMTP 送信時はホスト・ポート・暗号化・認証・ユーザー名も出力
+- Custom Post Type UI 対応（追記）
+  - CPTUI が登録した投稿タイプ・タクソノミーは既存セクションで自動取得されることを明記
+
+### Changed
+- `field_groups` セクションのラベルを「SCF / ACF フィールドグループ」→「ACF / Secure Custom Fields フィールドグループ」に変更
+  - Smart Custom Fields（MTS製）と Secure Custom Fields（WordPress.org公式）の混同を防ぐため
+- 投稿タイプ除外リストに `smart-custom-fields` を追加（内部 CPT が一覧に混入しないよう）
+
+---
+
 ## [1.4.1] - 2026-06-10
 
 ### Changed

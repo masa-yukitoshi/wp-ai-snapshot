@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP AI Snapshot
  * Description: WordPress の構成情報（投稿タイプ・タクソノミー・フィールド・メニュー・プラグイン・SEO設定等）をJSON / Markdownで一括出力します。Claude・ChatGPT 等のAIへサイト構成を伝える際にお使いください。REST API・WP-CLI にも対応しています。
- * Version:     1.4.1
+ * Version:     1.5.0
  * Author:      Den LLC.
  */
 
@@ -25,13 +25,15 @@ function wpais_sections() {
 		'post_types'     => 'カスタム投稿タイプ',
 		'taxonomies'     => 'タクソノミー',
 		'menus'          => 'ナビゲーションメニュー',
-		'field_groups'   => 'SCF / ACF フィールドグループ',
+		'field_groups'   => 'ACF / Secure Custom Fields フィールドグループ',
+		'smcf'           => 'Smart Custom Fields フィールドグループ',
 		'blocks'         => 'Lazy Blocks',
 		'smb'            => 'Snow Monkey Blocks',
 		'yoast'          => 'Yoast SEO',
 		'aioseo'         => 'All in One SEO',
 		'cf7'            => 'Contact Form 7',
 		'mwform'         => 'MW WP Form',
+		'wpsmtp'         => 'WP Mail SMTP',
 		'widgets'        => 'ウィジェット',
 		'block_patterns' => 'ブロックパターン',
 		'field_samples'  => 'カスタムフィールドサンプル',
@@ -60,7 +62,7 @@ function wpais_page() {
 	?>
 	<div class="wrap">
 		<h1>AI Snapshot</h1>
-		<p>WordPressの構成情報（投稿タイプ・タクソノミー・SCFフィールド・Lazy Blocks・固定ページ・プラグイン・設定等）を出力します。</p>
+		<p>WordPressの構成情報（投稿タイプ・タクソノミー・ACF / Smart Custom Fields フィールド・Lazy Blocks・固定ページ・プラグイン・設定等）を出力します。</p>
 
 		<div id="wpais-sections" style="margin:16px 0;padding:16px;background:#fff;border:1px solid #c3c4c7;border-radius:3px;">
 			<div style="margin-bottom:10px;">
@@ -485,12 +487,14 @@ function wpais_generate( $sections = null ) {
 		'taxonomies'     => 'wpais_taxonomies',
 		'menus'          => 'wpais_menus',
 		'field_groups'   => 'wpais_scf',
+		'smcf'           => 'wpais_smcf',
 		'blocks'         => 'wpais_lazy_blocks',
 		'smb'            => 'wpais_smb',
 		'yoast'          => 'wpais_yoast',
 		'aioseo'         => 'wpais_aioseo',
 		'cf7'            => 'wpais_cf7',
 		'mwform'         => 'wpais_mwform',
+		'wpsmtp'         => 'wpais_wpsmtp',
 		'widgets'        => 'wpais_widgets',
 		'block_patterns' => 'wpais_block_patterns',
 		'field_samples'  => 'wpais_field_samples',
@@ -677,6 +681,7 @@ function wpais_post_types() {
 		'lazyblocks', 'lazyblocks_templates',
 		'wpcf7_contact_form',
 		'mw-wp-form',
+		'smart-custom-fields',
 	];
 
 	foreach ( $post_types as $pt ) {
@@ -783,7 +788,7 @@ function wpais_build_menu_tree( array $items, $parent_id = 0 ) {
 }
 
 
-// ---- SCF / ACF フィールドグループ ----
+// ---- ACF / Secure Custom Fields フィールドグループ ----
 function wpais_scf() {
 	if ( ! function_exists( 'acf_get_field_groups' ) ) return null;
 
@@ -822,6 +827,69 @@ function wpais_scf_fields( array $fields ) {
 	}
 
 	return $result;
+}
+
+
+// ---- Smart Custom Fields ----
+function wpais_smcf() {
+	if ( ! post_type_exists( 'smart-custom-fields' ) ) return null;
+
+	global $wpdb;
+	$rows = $wpdb->get_results(
+		"SELECT ID, post_title FROM {$wpdb->posts} WHERE post_type = 'smart-custom-fields' AND post_status = 'publish' ORDER BY ID ASC"
+	);
+
+	if ( empty( $rows ) ) return [];
+
+	$result = [];
+	foreach ( $rows as $row ) {
+		$post_id   = (int) $row->ID;
+		$condition = get_post_meta( $post_id, 'smart-cf-condition', true );
+		$settings  = get_post_meta( $post_id, 'smart-cf-setting', true );
+
+		$result[] = [
+			'title'     => $row->post_title,
+			'condition' => is_array( $condition ) ? $condition : [],
+			'groups'    => wpais_smcf_parse_groups( $settings ),
+		];
+	}
+
+	return $result;
+}
+
+function wpais_smcf_parse_groups( $settings ) {
+	$result = [];
+	if ( ! is_array( $settings ) ) return $result;
+
+	foreach ( $settings as $group ) {
+		if ( ! is_array( $group ) ) continue;
+
+		$fields = [];
+		foreach ( ( $group['fields'] ?? [] ) as $field ) {
+			if ( ! is_array( $field ) ) continue;
+			$item = [
+				'type'  => $field['type'] ?? '',
+				'name'  => $field['name'] ?? '',
+				'label' => $field['label'] ?? '',
+			];
+			if ( ! empty( $field['notes'] ) ) $item['notes'] = $field['notes'];
+			$fields[] = $item;
+		}
+
+		$result[] = [
+			'group_name' => $group['group-name'] ?? '',
+			'repeat'     => ! empty( $group['repeat'] ),
+			'fields'     => $fields,
+		];
+	}
+
+	return $result;
+}
+
+function wpais_smcf_condition_summary( array $condition ) {
+	if ( empty( $condition ) ) return '（条件なし）';
+	// smart-cf-condition は投稿タイプスラッグの配列: ['post', 'product'] 等
+	return 'post_type == ' . implode( ', ', $condition );
 }
 
 
@@ -1013,6 +1081,40 @@ function wpais_mwform_parse_fields( $content ) {
 			'type'     => $m[1],
 			'name'     => $m[2],
 			'required' => $required,
+		];
+	}
+
+	return $result;
+}
+
+
+// ---- WP Mail SMTP ----
+function wpais_wpsmtp() {
+	$options = null;
+	foreach ( [ 'wpmailsmtp_options', 'wp_mail_smtp', 'wp_mail_smtp_options' ] as $key ) {
+		$val = get_option( $key );
+		if ( ! empty( $val ) && is_array( $val ) ) { $options = $val; break; }
+	}
+	if ( $options === null ) return null;
+
+	$mail   = $options['mail'] ?? [];
+	$mailer = $mail['mailer'] ?? 'unknown';
+
+	$result = [
+		'mailer'      => $mailer,
+		'from_email'  => $mail['from_email'] ?? null,
+		'from_name'   => $mail['from_name'] ?? null,
+		'do_not_send' => ! empty( $options['general']['do_not_send'] ),
+	];
+
+	if ( $mailer === 'smtp' ) {
+		$smtp           = $options['smtp'] ?? [];
+		$result['smtp'] = [
+			'host'       => $smtp['host'] ?? null,
+			'port'       => isset( $smtp['port'] ) ? (int) $smtp['port'] : null,
+			'encryption' => $smtp['encryption'] ?? null,
+			'auth'       => ! empty( $smtp['autentication'] ),
+			'username'   => $smtp['username'] ?? null,
 		];
 	}
 
@@ -1303,9 +1405,9 @@ function wpais_to_markdown( array $data ) {
 		}
 	}
 
-	// ---- SCF フィールドグループ ----
+	// ---- ACF / Secure Custom Fields フィールドグループ ----
 	if ( ! empty( $data['field_groups'] ) ) {
-		$lines[] = '## SCF / ACF フィールドグループ';
+		$lines[] = '## ACF / Secure Custom Fields フィールドグループ';
 		foreach ( $data['field_groups'] as $group ) {
 			$lines[] = '### ' . $group['title'];
 
@@ -1336,6 +1438,29 @@ function wpais_to_markdown( array $data ) {
 				}
 			}
 			$lines[] = '';
+		}
+	}
+
+	// ---- Smart Custom Fields フィールドグループ ----
+	if ( ! empty( $data['smcf'] ) ) {
+		$lines[] = '## Smart Custom Fields フィールドグループ';
+		foreach ( $data['smcf'] as $group ) {
+			$lines[] = '### ' . $group['title'];
+			$lines[] = '適用条件: ' . wpais_smcf_condition_summary( $group['condition'] );
+			$lines[] = '';
+
+			foreach ( ( $group['groups'] ?? [] ) as $sg ) {
+				$repeat  = $sg['repeat'] ? '（繰り返し）' : '';
+				$lines[] = '**グループキー: ' . $sg['group_name'] . '**' . $repeat;
+				if ( ! empty( $sg['fields'] ) ) {
+					$lines[] = '| フィールド名 | ラベル | タイプ | 備考 |';
+					$lines[] = '|---|---|---|---|';
+					foreach ( $sg['fields'] as $field ) {
+						$lines[] = '| ' . $field['name'] . ' | ' . $field['label'] . ' | ' . $field['type'] . ' | ' . ( $field['notes'] ?? '' ) . ' |';
+					}
+				}
+				$lines[] = '';
+			}
 		}
 	}
 
@@ -1435,6 +1560,29 @@ function wpais_to_markdown( array $data ) {
 			}
 			$lines[] = '';
 		}
+	}
+
+	// ---- WP Mail SMTP ----
+	if ( ! empty( $data['wpsmtp'] ) ) {
+		$s       = $data['wpsmtp'];
+		$lines[] = '## WP Mail SMTP';
+		$lines[] = '| 設定 | 値 |';
+		$lines[] = '|---|---|';
+		$lines[] = '| 送信方法 | ' . ( $s['mailer'] ?? '' ) . ' |';
+		$lines[] = '| From メール | ' . ( $s['from_email'] ?? '' ) . ' |';
+		$lines[] = '| From 名前 | ' . ( $s['from_name'] ?? '' ) . ' |';
+		$lines[] = '| 送信停止 | ' . ( $s['do_not_send'] ? 'はい（テストモード）' : 'いいえ' ) . ' |';
+		if ( ! empty( $s['smtp'] ) ) {
+			$smtp    = $s['smtp'];
+			$lines[] = '| SMTP ホスト | ' . ( $smtp['host'] ?? '' ) . ' |';
+			$lines[] = '| SMTP ポート | ' . ( $smtp['port'] ?? '' ) . ' |';
+			$lines[] = '| 暗号化 | ' . ( $smtp['encryption'] ?? '' ) . ' |';
+			$lines[] = '| 認証 | ' . ( $smtp['auth'] ? '有効' : '無効' ) . ' |';
+			if ( ! empty( $smtp['username'] ) ) {
+				$lines[] = '| ユーザー名 | ' . $smtp['username'] . ' |';
+			}
+		}
+		$lines[] = '';
 	}
 
 	// ---- ウィジェット ----

@@ -89,9 +89,9 @@ wp ai-snapshot export --format=md --sections=environment,plugins,post_types
 ```
 environment  site          theme         theme_json    template_files
 settings     plugins       pages         post_types    taxonomies
-menus        field_groups  blocks        smb           yoast
-aioseo       cf7           mwform        widgets       block_patterns
-field_samples
+menus        field_groups  smcf          blocks        smb
+yoast        aioseo        cf7           mwform        wpsmtp
+widgets      block_patterns field_samples
 ```
 
 ---
@@ -113,16 +113,18 @@ field_samples
 | カスタム投稿タイプ | supports・関連タクソノミー・アーカイブ設定・公開済み件数 |
 | タクソノミー | ターム一覧付き |
 | ナビゲーションメニュー | 登録ロケーション・項目一覧（URL・階層構造付き） |
-| SCF / ACF フィールドグループ | フィールド定義・サブフィールド（※） |
+| ACF / Secure Custom Fields フィールドグループ | フィールド定義・サブフィールド（※） |
+| Smart Custom Fields フィールドグループ | グループキー・繰り返し有無・フィールド定義（※） |
 | Lazy Blocks | カスタムブロックのコントロール定義（※） |
 | Snow Monkey Blocks | 登録済みブロック一覧（※） |
 | Yoast SEO | OGP・パンくず・noindex 設定等（※） |
 | All in One SEO | OGP・パンくず・noindex 設定等（※） |
 | Contact Form 7 | フォームのフィールド定義（※） |
 | MW WP Form | フォームのフィールド定義（※） |
+| WP Mail SMTP | 送信方法・From メール・SMTP 設定等（※） |
 | ウィジェット | サイドバーごとのアクティブウィジェット一覧 |
 | ブロックパターン | テーマ・プラグインが登録したブロックパターン一覧 |
-| カスタムフィールドサンプル | SCF/ACF の各グループから実データのサンプル（※） |
+| カスタムフィールドサンプル | ACF / Secure Custom Fields の各グループから実データのサンプル（※） |
 
 **(※) 対応プラグインが有効な場合のみ出力されます。未導入でも動作します。**
 
@@ -132,14 +134,17 @@ field_samples
 
 | プラグイン | 出力されるセクション |
 |---|---|
-| [SCF (Smart Custom Fields)](https://wordpress.org/plugins/smart-custom-fields/) | SCF / ACF フィールドグループ、カスタムフィールドサンプル |
-| [Advanced Custom Fields (ACF)](https://www.advancedcustomfields.com/) | SCF / ACF フィールドグループ、カスタムフィールドサンプル |
+| [Advanced Custom Fields (ACF)](https://www.advancedcustomfields.com/) | ACF / Secure Custom Fields フィールドグループ、カスタムフィールドサンプル |
+| [Secure Custom Fields](https://wordpress.org/plugins/secure-custom-fields/) | ACF / Secure Custom Fields フィールドグループ、カスタムフィールドサンプル |
+| [Smart Custom Fields](https://wordpress.org/plugins/smart-custom-fields/) | Smart Custom Fields フィールドグループ |
+| [Custom Post Type UI](https://wordpress.org/plugins/custom-post-type-ui/) | カスタム投稿タイプ、タクソノミー（標準セクションで自動取得） |
 | [Lazy Blocks](https://wordpress.org/plugins/lazy-blocks/) | Lazy Blocks |
 | [Snow Monkey Blocks](https://wordpress.org/plugins/snow-monkey-blocks/) | Snow Monkey Blocks |
 | [Yoast SEO](https://wordpress.org/plugins/wordpress-seo/) | Yoast SEO |
 | [All in One SEO Pack](https://wordpress.org/plugins/all-in-one-seo-pack/) | All in One SEO |
 | [Contact Form 7](https://wordpress.org/plugins/contact-form-7/) | Contact Form 7 |
 | [MW WP Form](https://plugins.2inc.org/mw-wp-form/) | MW WP Form |
+| [WP Mail SMTP](https://wordpress.org/plugins/wp-mail-smtp/) | WP Mail SMTP |
 
 ---
 
