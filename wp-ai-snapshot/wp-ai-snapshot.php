@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP AI Snapshot
  * Description: WordPress の構成情報（投稿タイプ・タクソノミー・フィールド・メニュー・プラグイン・SEO設定等）をJSON / Markdownで一括出力します。Claude・ChatGPT 等のAIへサイト構成を伝える際にお使いください。REST API・WP-CLI にも対応しています。
- * Version:     1.5.0
+ * Version:     1.5.1
  * Author:      Den LLC.
  */
 
@@ -417,10 +417,33 @@ function wpais_rest_handler( WP_REST_Request $request ) {
 	$format = $request->get_param( 'format' );
 
 	if ( $format === 'md' ) {
-		return rest_ensure_response( [ 'content' => wpais_to_markdown( $data ) ] );
+		// 本文は wpais_rest_serve_markdown() で JSON 化せずにそのまま出力する
+		$response = new WP_REST_Response( wpais_to_markdown( $data ) );
+		$response->header( 'Content-Type', 'text/markdown; charset=utf-8' );
+		return $response;
 	}
 
 	return rest_ensure_response( $data );
+}
+
+/**
+ * format=md のときだけ、REST サーバーの JSON 化を通さず Markdown をそのまま返す。
+ * 認証・権限チェックは通常どおり済んだ後に呼ばれる（エラー時は JSON のまま）。
+ */
+add_filter( 'rest_pre_serve_request', 'wpais_rest_serve_markdown', 10, 4 );
+function wpais_rest_serve_markdown( $served, $result, $request, $server ) {
+	if ( $served
+		|| $request->get_method() === 'HEAD'
+		|| $request->get_route() !== '/wp-ai-snapshot/v1/snapshot'
+		|| $request->get_param( 'format' ) !== 'md'
+		|| $result->is_error()
+		|| ! is_string( $result->get_data() )
+	) {
+		return $served;
+	}
+
+	echo $result->get_data(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Markdown 本文をそのまま返す
+	return true;
 }
 
 

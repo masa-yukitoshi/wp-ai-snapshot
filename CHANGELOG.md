@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.1] - 2026-10-16
+
+### Fixed
+- REST API の `?format=md` が Markdown を `{"content":"..."}` の JSON に包んで返していた不具合を修正
+  - 日本語も `\uXXXX` にエスケープされ、curl で取得すると人が読めない文字列になっていた
+  - `rest_pre_serve_request` フィルターで、Markdown 本文を `Content-Type: text/markdown; charset=utf-8` のまま返すよう変更
+  - `format=json`（デフォルト）・認証エラー時の応答・管理画面のコピー機能・WP-CLI は変更なし
+
+---
+
 ## [1.5.0] - 2026-06-15
 
 ### Added

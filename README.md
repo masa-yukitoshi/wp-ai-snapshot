@@ -69,7 +69,7 @@ curl -u "管理者ユーザー名:アプリケーションパスワード" \
 
 | パラメータ | 説明 | 例 |
 |---|---|---|
-| `format` | `json`（デフォルト）または `md` | `?format=md` |
+| `format` | `json`（デフォルト）または `md`。`md` のときは Markdown 本文がそのまま返ります（`Content-Type: text/markdown`） | `?format=md` |
 | `sections` | 取得するセクションをカンマ区切りで指定 | `?sections=plugins,post_types` |
 
 ---
